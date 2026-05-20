@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://miro.com/app/static/sdk/v2/miro.js"></script>
+</head>
+<body>
+  <h3>Drive Link Extractor</h3>
+  <button id="run">Extract Links</button>
+  <pre id="output" style="white-space:pre-wrap;"></pre>
+
+  <script>
+    document.getElementById('run').addEventListener('click', async () => {
+      const output = document.getElementById('output');
+      output.textContent = 'Working...';
+
+      const items = await miro.board.get();
+      const results = [];
+
+      for (const item of items) {
+        if (item.linkedTo) {
+          results.push({
+            id: item.id,
+            type: item.type,
+            title: item.title || '',
+            linkedTo: item.linkedTo,
+            parentId: item.parentId || null
+          });
+        }
+      }
+
+      output.textContent = JSON.stringify(results, null, 2);
+    });
+  </script>
+</body>
+</html>
