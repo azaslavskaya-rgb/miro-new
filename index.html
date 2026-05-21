@@ -1,34 +1,37 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="UTF-8">
   <script src="https://miro.com/app/static/sdk/v2/miro.js"></script>
 </head>
 <body>
   <h3>Drive Link Extractor</h3>
-  <button id="run">Extract Links</button>
+  <button id="run" disabled>Extract Links</button>
   <pre id="output" style="white-space:pre-wrap;"></pre>
-
   <script>
-    document.getElementById('run').addEventListener('click', async () => {
-      const output = document.getElementById('output');
-      output.textContent = 'Working...';
-
-      const items = await miro.board.get();
-      const results = [];
-
-      for (const item of items) {
-        if (item.linkedTo) {
-          results.push({
-            id: item.id,
-            type: item.type,
-            title: item.title || '',
-            linkedTo: item.linkedTo,
-            parentId: item.parentId || null
-          });
+    miro.onReady(() => {
+      document.getElementById('run').disabled = false;
+      document.getElementById('run').addEventListener('click', async () => {
+        const output = document.getElementById('output');
+        output.textContent = 'Working...';
+        try {
+          const items = await miro.board.get();
+          const results = items
+            .filter(item => item.linkedTo)
+            .map(item => ({
+              id: item.id,
+              type: item.type,
+              title: item.title || '',
+              linkedTo: item.linkedTo,
+              parentId: item.parentId || null
+            }));
+          output.textContent = results.length
+            ? JSON.stringify(results, null, 2)
+            : 'No items with linkedTo found.';
+        } catch (e) {
+          output.textContent = 'Error: ' + e.message;
         }
-      }
-
-      output.textContent = JSON.stringify(results, null, 2);
+      });
     });
   </script>
 </body>
