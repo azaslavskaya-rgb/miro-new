@@ -1,43 +1,459 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Drive Link Extractor</title>
   <script src="https://miro.com/app/static/sdk/v2/miro.js"></script>
+  <style>
+    :root {
+      --bg: #fbfbf9;
+      --panel: #ffffff;
+      --ink: #16161a;
+      --muted: #6c6c74;
+      --line: #e7e6e1;
+      --accent: #1a5fff;
+      --accent-ink: #ffffff;
+      --ok-bg: #e8f6ec; --ok-ink: #176a36;
+      --warn-bg: #fdf3df; --warn-ink: #8a5d00;
+      --err-bg: #fceae8; --err-ink: #b5302a;
+      --info-bg: #ecf1ff; --info-ink: #1f47cc;
+      --code-bg: #f4f4f1;
+      --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+      --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      --r: 10px;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, sans-serif;
+      font-size: 14px; line-height: 1.45;
+    }
+    .wrap { padding: 18px 16px 28px; max-width: 540px; margin: 0 auto; }
+
+    header { margin-bottom: 18px; }
+    h1 {
+      font-family: var(--serif);
+      font-size: 21px; font-weight: 600;
+      letter-spacing: -0.01em; margin: 0 0 3px;
+    }
+    .sub { color: var(--muted); font-size: 12.5px; margin: 0; }
+
+    .field { margin-bottom: 14px; }
+    label {
+      display: block; font-size: 11.5px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.04em;
+      color: var(--muted); margin-bottom: 5px;
+    }
+    select, input[type=text] {
+      width: 100%; padding: 9px 11px;
+      border: 1px solid var(--line); border-radius: var(--r);
+      background: var(--panel); color: var(--ink);
+      font-size: 13.5px;
+    }
+    select:focus, input:focus { outline: none; border-color: var(--accent); }
+    .checkbox {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13.5px; cursor: pointer; user-select: none;
+    }
+    .checkbox input { width: 15px; height: 15px; margin: 0; cursor: pointer; accent-color: var(--accent); }
+    .hint { font-size: 11.5px; color: var(--muted); margin-top: 5px; line-height: 1.5; }
+    code.k { font-family: var(--mono); font-size: 11.5px; background: var(--code-bg); padding: 1px 5px; border-radius: 5px; }
+
+    .actions { display: flex; gap: 8px; margin: 16px 0 14px; }
+    button {
+      appearance: none; cursor: pointer;
+      border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink);
+      padding: 10px 14px; border-radius: var(--r);
+      font-size: 13.5px; font-weight: 650; flex: 1 1 auto;
+      transition: filter .12s ease, background .12s ease;
+    }
+    button:hover:not(:disabled) { filter: brightness(1.07); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    button.ghost { background: var(--panel); color: var(--ink); border-color: var(--line); }
+    button.ghost:hover:not(:disabled) { background: var(--code-bg); }
+    .mini { flex: 0 0 auto; padding: 6px 11px; font-size: 12px; }
+
+    .status {
+      display: none; align-items: center; gap: 9px;
+      padding: 10px 12px; border-radius: var(--r);
+      font-size: 13px; margin-bottom: 14px; word-break: break-word;
+    }
+    .status.on { display: flex; }
+    .status.ok { background: var(--ok-bg); color: var(--ok-ink); }
+    .status.warn { background: var(--warn-bg); color: var(--warn-ink); }
+    .status.err { background: var(--err-bg); color: var(--err-ink); }
+    .status.info { background: var(--info-bg); color: var(--info-ink); }
+    .spin {
+      width: 14px; height: 14px; flex: 0 0 auto;
+      border: 2px solid currentColor; border-top-color: transparent;
+      border-radius: 50%; animation: r .7s linear infinite;
+    }
+    @keyframes r { to { transform: rotate(360deg); } }
+
+    .results { display: none; }
+    .results.on { display: block; }
+    .rhead {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 8px;
+    }
+    .badge { font-size: 12px; font-weight: 700; color: var(--muted); }
+    .rtools { display: flex; gap: 6px; }
+    ul.links {
+      list-style: none; margin: 0; padding: 0;
+      border: 1px solid var(--line); border-radius: var(--r);
+      max-height: 260px; overflow-y: auto; background: var(--panel);
+    }
+    ul.links:empty { display: none; }
+    li.link { padding: 9px 11px; border-bottom: 1px solid var(--line); }
+    li.link:last-child { border-bottom: none; }
+    .li-t { font-weight: 600; font-size: 12.5px; margin-bottom: 2px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .li-u { font-family: var(--mono); font-size: 11px; color: var(--accent);
+            word-break: break-all; text-decoration: none; }
+    .li-u:hover { text-decoration: underline; }
+    .li-m { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+
+    details { margin-top: 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); }
+    summary { cursor: pointer; padding: 9px 11px; font-size: 12px; font-weight: 650; user-select: none; }
+    pre { margin: 0; padding: 11px; background: var(--code-bg); font-family: var(--mono);
+          font-size: 11px; overflow-x: auto; max-height: 220px;
+          border-radius: 0 0 var(--r) var(--r); }
+    hr.div { border: none; height: 1px; background: var(--line); margin: 18px 0; }
+  </style>
 </head>
 <body>
-  <h3>Drive Link Extractor</h3>
-  <button id="run">Extract Links</button>
-  <pre id="output" style="white-space:pre-wrap;"></pre>
-  <script>
-    // Контекст 1: регистрация иконки в сайдбаре
-    miro.board.ui.on('icon:click', async () => {
-      await miro.board.ui.openPanel({ url: 'index.html' });
-    });
+  <div class="wrap" id="app" style="display:none;">
+    <header>
+      <h1>Drive Link Extractor</h1>
+      <p class="sub">Собирает <code class="k">linkedTo</code>-ссылки и записывает их обратно в фрейм как читаемый текст — чтобы n8n забрал их через REST API.</p>
+    </header>
 
-    // Контекст 2: логика внутри открытой панели
-    const runBtn = document.getElementById('run');
-    if (runBtn) {
-      runBtn.addEventListener('click', async () => {
-        const output = document.getElementById('output');
-        output.textContent = 'Working...';
-        try {
-          const items = await miro.board.get();
-          const results = items
-            .filter(item => item.linkedTo)
-            .map(item => ({
-              id: item.id,
-              type: item.type,
-              title: item.title || '',
-              linkedTo: item.linkedTo,
-              parentId: item.parentId || null
-            }));
-          output.textContent = results.length
-            ? JSON.stringify(results, null, 2)
-            : 'No items with linkedTo found.';
-        } catch (e) {
-          output.textContent = 'Error: ' + e.message;
-        }
+    <div class="field">
+      <label for="scope">Откуда брать</label>
+      <select id="scope">
+        <option value="selected-frame">Выбранный фрейм</option>
+        <option value="selection">Выделенные элементы</option>
+      </select>
+      <p class="hint" id="scopeHint"></p>
+    </div>
+
+    <div class="field">
+      <label class="checkbox">
+        <input type="checkbox" id="googleOnly" checked />
+        Только Google Drive / Docs
+      </label>
+      <p class="hint">Совпадение по <code class="k">drive.google.com</code> и <code class="k">docs.google.com</code>.</p>
+    </div>
+
+    <div class="field">
+      <label class="checkbox">
+        <input type="checkbox" id="writeBack" checked />
+        Записать результат в фрейм (для n8n)
+      </label>
+      <p class="hint">Создаёт/обновляет один текстовый блок внутри фрейма. Повторный запуск перезаписывает его, дублей не будет.</p>
+    </div>
+
+    <div class="actions">
+      <button id="run">Извлечь ссылки</button>
+    </div>
+
+    <div class="status" id="status"></div>
+
+    <div class="results" id="results">
+      <div class="rhead">
+        <span class="badge" id="badge">0 ссылок</span>
+        <div class="rtools">
+          <button class="ghost mini" id="copy">Копировать</button>
+          <button class="ghost mini" id="csv">CSV</button>
+        </div>
+      </div>
+      <ul class="links" id="list"></ul>
+
+      <details id="jsonBox">
+        <summary>JSON-данные</summary>
+        <pre id="json"></pre>
+      </details>
+    </div>
+  </div>
+
+  <script>
+    "use strict";
+
+    const GOOGLE_HOSTS = ["drive.google.com", "docs.google.com"];
+    // Метка нашего выходного элемента, чтобы находить и перезаписывать его.
+    const OUTPUT_META_KEY = "driveLinkExtractor";
+    const OUTPUT_META_VALUE = "results-block";
+
+    const params = new URLSearchParams(location.search);
+
+    // ---------------------------------------------------------------------
+    //  ICON CLICK — открывает панель (контекст регистрации иконки)
+    // ---------------------------------------------------------------------
+    if (typeof miro !== "undefined" && miro.board && miro.board.ui) {
+      miro.board.ui.on("icon:click", async () => {
+        await miro.board.ui.openPanel({ url: "index.html?panel=1" });
       });
+    }
+
+    // ---------------------------------------------------------------------
+    //  PANEL LOGIC
+    // ---------------------------------------------------------------------
+    const $ = (id) => document.getElementById(id);
+    let els = {};
+    let lastFound = [];
+    let lastFrameId = null;
+    let boardInfo = { id: null };
+
+    function setStatus(msg, kind = "info", loading = false) {
+      els.status.className = "status on " + kind;
+      els.status.innerHTML = "";
+      if (loading) {
+        const s = document.createElement("span");
+        s.className = "spin";
+        els.status.appendChild(s);
+      }
+      const t = document.createElement("span");
+      t.textContent = msg;
+      els.status.appendChild(t);
+    }
+
+    function isGoogle(url) {
+      if (!url) return false;
+      try {
+        const h = new URL(url).hostname.toLowerCase();
+        return GOOGLE_HOSTS.some((g) => h === g || h.endsWith("." + g));
+      } catch (_) {
+        return GOOGLE_HOSTS.some((g) => String(url).toLowerCase().includes(g));
+      }
+    }
+
+    function titleOf(item) {
+      const raw = item.title || item.content || item.text || item.plainText || item.description || "";
+      const clean = String(raw).replace(/<[^>]*>/g, "").trim();
+      if (clean) return clean.length > 80 ? clean.slice(0, 77) + "…" : clean;
+      return `${item.type || "item"} ${item.id}`;
+    }
+
+    function escHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    }
+
+    const SCOPE_HINT = {
+      "selected-frame": "Выдели на доске фрейм (или любой элемент внутри него) и нажми кнопку.",
+      "selection": "Выдели нужные элементы и нажми кнопку — фрейм не обязателен.",
+    };
+    function refreshScopeHint() {
+      els.scopeHint.textContent = SCOPE_HINT[els.scope.value] || "";
+    }
+
+    // Определяем целевой фрейм для записи результата.
+    async function resolveFrame() {
+      const sel = await miro.board.getSelection();
+      const direct = sel.find((it) => it.type === "frame");
+      if (direct) return direct;
+      const child = sel.find((it) => it.parentId);
+      if (child) {
+        const all = await miro.board.get({ type: "frame" });
+        const f = all.find((fr) => fr.id === child.parentId);
+        if (f) return f;
+      }
+      return null;
+    }
+
+    // Собираем элементы по выбранному режиму.
+    async function collectItems() {
+      const scope = els.scope.value;
+      if (scope === "selection") {
+        const sel = await miro.board.getSelection();
+        return { items: sel.filter((it) => it.type !== "frame"), frame: await resolveFrame() };
+      }
+      // selected-frame
+      const frame = await resolveFrame();
+      if (!frame) throw new Error("Не найден фрейм. Выдели фрейм или элемент внутри него.");
+      const all = await miro.board.get();
+      const items = all.filter((it) => it.parentId === frame.id);
+      return { items, frame };
+    }
+
+    function buildData() {
+      return {
+        source: "miro-drive-link-extractor",
+        boardId: boardInfo.id,
+        frameId: lastFrameId,
+        googleOnly: els.googleOnly.checked,
+        extractedAt: new Date().toISOString(),
+        count: lastFound.length,
+        links: lastFound,
+      };
+    }
+
+    function render(found) {
+      els.results.className = "results on";
+      els.badge.textContent = `${found.length} ${found.length === 1 ? "ссылка" : "ссылок"}`;
+      els.list.innerHTML = "";
+      for (const l of found) {
+        const li = document.createElement("li");
+        li.className = "link";
+        const t = document.createElement("div");
+        t.className = "li-t"; t.textContent = l.title; li.appendChild(t);
+        const a = document.createElement("a");
+        a.className = "li-u"; a.href = l.url; a.target = "_blank";
+        a.rel = "noopener noreferrer"; a.textContent = l.url; li.appendChild(a);
+        const m = document.createElement("div");
+        m.className = "li-m"; m.textContent = `${l.type} · ${l.id}`; li.appendChild(m);
+        els.list.appendChild(li);
+      }
+      els.json.textContent = JSON.stringify(buildData(), null, 2);
+    }
+
+    // Записываем результат в фрейм: один текстовый блок, перезаписываемый.
+    async function writeToFrame(frame, found) {
+      if (!frame) {
+        setStatus("Ссылки извлечены, но фрейм не определён — записать в доску некуда. Выбери режим «Выбранный фрейм».", "warn");
+        return;
+      }
+
+      // Текст: заголовок + по строке на ссылку (plain URL, дружелюбно к парсингу).
+      const lines = found.map((l) => `${l.title} — ${l.url}`);
+      const header = `📥 Drive Links (${found.length}) · ${new Date().toLocaleString()}`;
+      const htmlBody = found.length
+        ? found.map((l) => `<p>${escHtml(l.title)}: <a href="${escHtml(l.url)}">${escHtml(l.url)}</a></p>`).join("")
+        : "<p>Ссылок не найдено.</p>";
+      const content = `<p><strong>${escHtml(header)}</strong></p>${htmlBody}`;
+
+      // Ищем уже созданный нами блок в этом фрейме.
+      const all = await miro.board.get({ type: "text" });
+      let target = null;
+      for (const t of all) {
+        if (t.parentId !== frame.id) continue;
+        try {
+          const tag = await t.getMetadata(OUTPUT_META_KEY);
+          if (tag === OUTPUT_META_VALUE) { target = t; break; }
+        } catch (_) { /* нет метадаты — пропускаем */ }
+      }
+
+      if (target) {
+        target.content = content;
+        await target.sync();
+        // metadata тоже обновим — полезно n8n как структура
+        try { await target.setMetadata("links", found); } catch (_) {}
+      } else {
+        // Кладём блок в правый верхний угол фрейма.
+        const x = frame.x + frame.width / 2 - 180;
+        const y = frame.y - frame.height / 2 + 40;
+        const text = await miro.board.createText({
+          content,
+          x, y, width: 320,
+          style: { fillColor: "#fff7d6", textAlign: "left", fontSize: 12 },
+        });
+        await frame.add(text);
+        await text.setMetadata(OUTPUT_META_KEY, OUTPUT_META_VALUE);
+        try { await text.setMetadata("links", found); } catch (_) {}
+        await text.sync();
+      }
+    }
+
+    async function run() {
+      els.run.disabled = true;
+      els.results.className = "results";
+      lastFound = []; lastFrameId = null;
+      try {
+        setStatus("Читаю элементы…", "info", true);
+        const { items, frame } = await collectItems();
+        lastFrameId = frame ? frame.id : null;
+
+        const googleOnly = els.googleOnly.checked;
+        const found = [];
+        for (const it of items) {
+          const url = it.linkedTo;
+          if (!url) continue;
+          if (googleOnly && !isGoogle(url)) continue;
+          found.push({ id: it.id, type: it.type, title: titleOf(it), url, parentId: it.parentId || null });
+        }
+        lastFound = found;
+        render(found);
+
+        if (found.length === 0) {
+          setStatus(googleOnly ? "Google-ссылок в этой области нет." : "Ссылок не найдено.", "warn");
+        } else if (els.writeBack.checked) {
+          setStatus("Записываю результат в фрейм…", "info", true);
+          await writeToFrame(frame, found);
+          setStatus(`Готово: ${found.length} ссыл. извлечено и записано в фрейм. n8n может забирать.`, "ok");
+        } else {
+          setStatus(`Найдено ${found.length} ссыл. (запись в фрейм отключена).`, "ok");
+        }
+      } catch (e) {
+        console.error(e);
+        setStatus("Ошибка: " + (e && e.message ? e.message : String(e)), "err");
+      } finally {
+        els.run.disabled = false;
+      }
+    }
+
+    async function copyJson() {
+      if (!lastFound.length) return;
+      const txt = JSON.stringify(buildData(), null, 2);
+      try { await navigator.clipboard.writeText(txt); setStatus("JSON скопирован.", "ok"); }
+      catch (_) {
+        const ta = document.createElement("textarea");
+        ta.value = txt; document.body.appendChild(ta); ta.select();
+        try { document.execCommand("copy"); setStatus("JSON скопирован.", "ok"); }
+        catch (e) { setStatus("Не удалось скопировать.", "err"); }
+        document.body.removeChild(ta);
+      }
+    }
+
+    function downloadCsv() {
+      if (!lastFound.length) return;
+      const esc = (v) => `"${String(v).replace(/"/g, '""')}"`;
+      const rows = [["title", "url", "type", "id", "parentId"]
+        .map(esc).join(",")];
+      for (const l of lastFound) {
+        rows.push([l.title, l.url, l.type, l.id, l.parentId || ""].map(esc).join(","));
+      }
+      const blob = new Blob([rows.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "drive-links.csv";
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a); URL.revokeObjectURL(url);
+      setStatus("CSV скачан.", "ok");
+    }
+
+    async function initPanel() {
+      $("app").style.display = "block";
+      els = {
+        scope: $("scope"), scopeHint: $("scopeHint"),
+        googleOnly: $("googleOnly"), writeBack: $("writeBack"),
+        run: $("run"), status: $("status"), results: $("results"),
+        badge: $("badge"), list: $("list"), json: $("json"),
+        copy: $("copy"), csv: $("csv"),
+      };
+      refreshScopeHint();
+      els.scope.addEventListener("change", refreshScopeHint);
+      els.run.addEventListener("click", run);
+      els.copy.addEventListener("click", copyJson);
+      els.csv.addEventListener("click", downloadCsv);
+
+      // getInfo() возвращает {id, createdAt, updatedAt, locale} — без названия доски.
+      try {
+        const info = await miro.board.getInfo();
+        boardInfo = { id: info.id };
+      } catch (_) { /* не критично */ }
+
+      // Авто-запуск, если попросили через URL (?autorun=1)
+      if (params.get("autorun") === "1") run();
+    }
+
+    // Панель грузится как обычная страница в iframe; запускаем логику, когда DOM готов.
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", () => { initPanel().catch(console.error); });
+    } else {
+      initPanel().catch(console.error);
     }
   </script>
 </body>
