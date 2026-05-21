@@ -6,12 +6,18 @@
 </head>
 <body>
   <h3>Drive Link Extractor</h3>
-  <button id="run" disabled>Extract Links</button>
+  <button id="run">Extract Links</button>
   <pre id="output" style="white-space:pre-wrap;"></pre>
   <script>
-    miro.onReady(() => {
-      document.getElementById('run').disabled = false;
-      document.getElementById('run').addEventListener('click', async () => {
+    // Контекст 1: регистрация иконки в сайдбаре
+    miro.board.ui.on('icon:click', async () => {
+      await miro.board.ui.openPanel({ url: 'index.html' });
+    });
+
+    // Контекст 2: логика внутри открытой панели
+    const runBtn = document.getElementById('run');
+    if (runBtn) {
+      runBtn.addEventListener('click', async () => {
         const output = document.getElementById('output');
         output.textContent = 'Working...';
         try {
@@ -32,7 +38,7 @@
           output.textContent = 'Error: ' + e.message;
         }
       });
-    });
+    }
   </script>
 </body>
 </html>
