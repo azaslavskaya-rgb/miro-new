@@ -412,12 +412,13 @@
         var items = result.items;
         var frame = result.frame;
 
-        // DEBUG
-        console.log("Frame ID:", frame ? frame.id : "none");
-        console.log("Total items:", items.length);
+        // DEBUG — показываем в статусе
+        var debugInfo = "Frame: " + (frame ? frame.id : "none") + " | Items: " + items.length + " | ";
         for (var d = 0; d < items.length; d++) {
-          console.log("ITEM", d, items[d].type, items[d].id, "parentId:", items[d].parentId);
+          debugInfo += items[d].type + "(" + items[d].parentId + ") ";
         }
+        setStatus(debugInfo, "info");
+        await new Promise(function(r) { setTimeout(r, 5000); });
 
         lastFrameId = frame ? frame.id : null;
 
