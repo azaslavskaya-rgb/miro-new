@@ -268,7 +268,7 @@
       return null;
     }
 
-    async function collectItems() {
+   async function collectItems() {
       var scope = elCache.scope.value;
       if (scope === "selection") {
         var sel = await miro.board.getSelection();
@@ -280,7 +280,25 @@
       var frame = await resolveFrame();
       if (!frame) throw new Error("Не найден фрейм. Выдели фрейм или элемент внутри него.");
       var all = await miro.board.get();
-      var items = all.filter(function (it) { return it.parentId === frame.id; });
+
+      // Рекурсивно собираем ID всех вложенных фреймов
+      var frameIds = [frame.id];
+      var added = true;
+      while (added) {
+        added = false;
+        for (var i = 0; i < all.length; i++) {
+          var it = all[i];
+          if (it.type === "frame" && frameIds.indexOf(it.parentId) !== -1 && frameIds.indexOf(it.id) === -1) {
+            frameIds.push(it.id);
+            added = true;
+          }
+        }
+      }
+
+      // Берём все не-фреймовые элементы из всех найденных фреймов
+      var items = all.filter(function (it) {
+        return it.type !== "frame" && frameIds.indexOf(it.parentId) !== -1;
+      });
       return { items: items, frame: frame };
     }
 
