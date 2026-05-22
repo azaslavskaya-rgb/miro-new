@@ -280,31 +280,7 @@ async function collectItems() {
       var frame = await resolveFrame();
       if (!frame) throw new Error("Не найден фрейм. Выдели фрейм или элемент внутри него.");
       var all = await miro.board.get();
-
-      // 1. Прямые дети по parentId
-      var childIds = [frame.id];
-
-      // 2. Находим вложенные фреймы по parentId ИЛИ по геометрии
-      var left   = frame.x - frame.width / 2;
-      var right  = frame.x + frame.width / 2;
-      var top    = frame.y - frame.height / 2;
-      var bottom = frame.y + frame.height / 2;
-
-      for (var i = 0; i < all.length; i++) {
-        var it = all[i];
-        if (it.type !== "frame" || it.id === frame.id) continue;
-        // Вложенный фрейм: либо parentId совпадает, либо центр внутри границ
-        var isChild = it.parentId === frame.id;
-        var isInside = it.x >= left && it.x <= right && it.y >= top && it.y <= bottom;
-        if (isChild || isInside) {
-          childIds.push(it.id);
-        }
-      }
-
-      // 3. Берём все не-фреймовые элементы, чей parentId в нашем списке
-      var items = all.filter(function (it) {
-        return it.type !== "frame" && childIds.indexOf(it.parentId) !== -1;
-      });
+      var items = all.filter(function (it) { return it.parentId === frame.id; });
       return { items: items, frame: frame };
     }
 
