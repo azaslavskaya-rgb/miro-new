@@ -268,7 +268,7 @@
       return null;
     }
 
-   async function collectItems() {
+    async function collectItems() {
       var scope = elCache.scope.value;
       if (scope === "selection") {
         var sel = await miro.board.getSelection();
@@ -281,23 +281,17 @@
       if (!frame) throw new Error("Не найден фрейм. Выдели фрейм или элемент внутри него.");
       var all = await miro.board.get();
 
-      // Рекурсивно собираем ID всех вложенных фреймов
-      var frameIds = [frame.id];
-      var added = true;
-      while (added) {
-        added = false;
-        for (var i = 0; i < all.length; i++) {
-          var it = all[i];
-          if (it.type === "frame" && frameIds.indexOf(it.parentId) !== -1 && frameIds.indexOf(it.id) === -1) {
-            frameIds.push(it.id);
-            added = true;
-          }
-        }
-      }
+      // Границы фрейма (x/y — центр, width/height — размеры)
+      var left   = frame.x - frame.width / 2;
+      var right  = frame.x + frame.width / 2;
+      var top    = frame.y - frame.height / 2;
+      var bottom = frame.y + frame.height / 2;
 
-      // Берём все не-фреймовые элементы из всех найденных фреймов
+      // Берём все не-фреймовые элементы, чей центр внутри границ фрейма
       var items = all.filter(function (it) {
-        return it.type !== "frame" && frameIds.indexOf(it.parentId) !== -1;
+        if (it.type === "frame") return false;
+        if (it.id === frame.id) return false;
+        return it.x >= left && it.x <= right && it.y >= top && it.y <= bottom;
       });
       return { items: items, frame: frame };
     }
@@ -411,21 +405,9 @@
         var result = await collectItems();
         var items = result.items;
         var frame = result.frame;
-
-      // DEBUG
-        var allFrames = await miro.board.get({ type: "frame" });
-        var debugInfo = "Selected frame: " + (frame ? frame.id : "none") + "\n";
-        debugInfo += "All frames on board:\n";
-        for (var d = 0; d < allFrames.length; d++) {
-          debugInfo += "  " + allFrames[d].id + " parentId:" + (allFrames[d].parentId || "none") + " title:" + (allFrames[d].title || "") + "\n";
-        }
-        debugInfo += "Items found: " + items.length;
-        setStatus(debugInfo, "info");
-        await new Promise(function(r) { setTimeout(r, 10000); });
-
         lastFrameId = frame ? frame.id : null;
 
-       var googleOnly = elCache.googleOnly.checked;
+        var googleOnly = elCache.googleOnly.checked;
         var found = [];
         // Регулярка для извлечения URL из текста и HTML
         var urlRegex = /https?:\/\/[^\s<>"')\]]+/g;
@@ -452,7 +434,7 @@
             }
           }
 
-        // 2. Ссылки из содержимого (content, text, title)
+          // 2. Ссылки из содержимого (content, text, title)
           var raw = (it.content || "") + " " + (it.text || "") + " " + (it.title || "");
 
           // 2a. Извлекаем href из HTML-тегов <a href="...">
