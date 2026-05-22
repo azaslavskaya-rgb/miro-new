@@ -395,20 +395,54 @@
         var frame = result.frame;
         lastFrameId = frame ? frame.id : null;
 
-        var googleOnly = elCache.googleOnly.checked;
+       var googleOnly = elCache.googleOnly.checked;
         var found = [];
+        // Регулярка для извлечения URL из текста и HTML
+        var urlRegex = /https?:\/\/[^\s<>"')\]]+/g;
+
         for (var i = 0; i < items.length; i++) {
           var it = items[i];
-          var url = it.linkedTo;
-          if (!url) continue;
-          if (googleOnly && !isGoogle(url)) continue;
-          found.push({
-            id: it.id,
-            type: it.type,
-            title: titleOf(it),
-            url: url,
-            parentId: it.parentId || null
-          });
+          var seen = {};
+
+          // 1. linkedTo (гиперссылка объекта)
+          if (it.linkedTo) {
+            var url = it.linkedTo;
+            if (!googleOnly || isGoogle(url)) {
+              if (!seen[url]) {
+                seen[url] = true;
+                found.push({
+                  id: it.id,
+                  type: it.type,
+                  title: titleOf(it),
+                  url: url,
+                  source: "linkedTo",
+                  parentId: it.parentId || null
+                });
+              }
+            }
+          }
+
+          // 2. Ссылки из содержимого (content, text, title)
+          var raw = (it.content || "") + " " + (it.text || "") + " " + (it.title || "");
+          var matches = raw.match(urlRegex);
+          if (matches) {
+            for (var j = 0; j < matches.length; j++) {
+              // Убираем мусор с конца URL (точки, запятые, скобки)
+              var cleanUrl = matches[j].replace(/[.,;:!?)>\]]+$/, "");
+              if (googleOnly && !isGoogle(cleanUrl)) continue;
+              if (!seen[cleanUrl]) {
+                seen[cleanUrl] = true;
+                found.push({
+                  id: it.id,
+                  type: it.type,
+                  title: titleOf(it),
+                  url: cleanUrl,
+                  source: "content",
+                  parentId: it.parentId || null
+                });
+              }
+            }
+          }
         }
         lastFound = found;
         render(found);
