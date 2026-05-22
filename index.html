@@ -412,13 +412,16 @@
         var items = result.items;
         var frame = result.frame;
 
-        // DEBUG — показываем в статусе
-        var debugInfo = "Frame: " + (frame ? frame.id : "none") + " | Items: " + items.length + " | ";
-        for (var d = 0; d < items.length; d++) {
-          debugInfo += items[d].type + "(" + items[d].parentId + ") ";
+      // DEBUG
+        var allFrames = await miro.board.get({ type: "frame" });
+        var debugInfo = "Selected frame: " + (frame ? frame.id : "none") + "\n";
+        debugInfo += "All frames on board:\n";
+        for (var d = 0; d < allFrames.length; d++) {
+          debugInfo += "  " + allFrames[d].id + " parentId:" + (allFrames[d].parentId || "none") + " title:" + (allFrames[d].title || "") + "\n";
         }
+        debugInfo += "Items found: " + items.length;
         setStatus(debugInfo, "info");
-        await new Promise(function(r) { setTimeout(r, 5000); });
+        await new Promise(function(r) { setTimeout(r, 10000); });
 
         lastFrameId = frame ? frame.id : null;
 
