@@ -411,6 +411,14 @@
         var result = await collectItems();
         var items = result.items;
         var frame = result.frame;
+
+        // DEBUG
+        console.log("Frame ID:", frame ? frame.id : "none");
+        console.log("Total items:", items.length);
+        for (var d = 0; d < items.length; d++) {
+          console.log("ITEM", d, items[d].type, items[d].id, "parentId:", items[d].parentId);
+        }
+
         lastFrameId = frame ? frame.id : null;
 
        var googleOnly = elCache.googleOnly.checked;
