@@ -440,8 +440,29 @@
             }
           }
 
-          // 2. Ссылки из содержимого (content, text, title)
+        // 2. Ссылки из содержимого (content, text, title)
           var raw = (it.content || "") + " " + (it.text || "") + " " + (it.title || "");
+
+          // 2a. Извлекаем href из HTML-тегов <a href="...">
+          var hrefRegex = /href=["']([^"']+)["']/g;
+          var hrefMatch;
+          while ((hrefMatch = hrefRegex.exec(raw)) !== null) {
+            var hrefUrl = hrefMatch[1];
+            if (googleOnly && !isGoogle(hrefUrl)) continue;
+            if (!seen[hrefUrl]) {
+              seen[hrefUrl] = true;
+              found.push({
+                id: it.id,
+                type: it.type,
+                title: titleOf(it),
+                url: hrefUrl,
+                source: "content",
+                parentId: it.parentId || null
+              });
+            }
+          }
+
+          // 2b. Извлекаем plain URL из текста
           var matches = raw.match(urlRegex);
           if (matches) {
             for (var j = 0; j < matches.length; j++) {
