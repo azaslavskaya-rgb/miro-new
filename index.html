@@ -189,14 +189,12 @@
 
     const params = new URLSearchParams(location.search);
 
-    // ---------------------------------------------------------------------
-    //  ICON CLICK — открывает панель (контекст регистрации иконки)
-    // ---------------------------------------------------------------------
-    if (typeof miro !== "undefined" && miro.board && miro.board.ui) {
-      miro.board.ui.on("icon:click", async () => {
-        await miro.board.ui.openPanel({ url: "index.html?panel=1" });
-      });
-    }
+  // ---------------------------------------------------------------------
+//  ICON CLICK — открывает панель (контекст регистрации иконки)
+// ---------------------------------------------------------------------
+miro.board.ui.on("icon:click", async () => {
+  await miro.board.ui.openPanel({ url: "index.html" });
+});
 
     // ---------------------------------------------------------------------
     //  PANEL LOGIC
