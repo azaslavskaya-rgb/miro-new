@@ -121,7 +121,6 @@
     pre { margin: 0; padding: 11px; background: var(--code-bg); font-family: var(--mono);
           font-size: 11px; overflow-x: auto; max-height: 220px;
           border-radius: 0 0 var(--r) var(--r); }
-    hr.div { border: none; height: 1px; background: var(--line); margin: 18px 0; }
   </style>
 </head>
 <body>
@@ -182,99 +181,107 @@
   <script>
     "use strict";
 
-    const GOOGLE_HOSTS = ["drive.google.com", "docs.google.com"];
-    // Метка нашего выходного элемента, чтобы находить и перезаписывать его.
-    const OUTPUT_META_KEY = "driveLinkExtractor";
-    const OUTPUT_META_VALUE = "results-block";
+    var GOOGLE_HOSTS = ["drive.google.com", "docs.google.com"];
+    var OUTPUT_META_KEY = "driveLinkExtractor";
+    var OUTPUT_META_VALUE = "results-block";
 
-    const params = new URLSearchParams(location.search);
+    // -----------------------------------------------------------------
+    //  ICON CLICK — регистрация иконки в сайдбаре (как в оригинале)
+    // -----------------------------------------------------------------
+    miro.board.ui.on("icon:click", async function () {
+      await miro.board.ui.openPanel({ url: "index.html" });
+    });
 
-  // ---------------------------------------------------------------------
-//  ICON CLICK — открывает панель (контекст регистрации иконки)
-// ---------------------------------------------------------------------
-miro.board.ui.on("icon:click", async () => {
-  await miro.board.ui.openPanel({ url: "index.html" });
-});
-
-    // ---------------------------------------------------------------------
+    // -----------------------------------------------------------------
     //  PANEL LOGIC
-    // ---------------------------------------------------------------------
-    const $ = (id) => document.getElementById(id);
-    let els = {};
-    let lastFound = [];
-    let lastFrameId = null;
-    let boardInfo = { id: null };
+    // -----------------------------------------------------------------
+    var elCache = {};
+    var lastFound = [];
+    var lastFrameId = null;
+    var boardInfo = { id: null };
 
-    function setStatus(msg, kind = "info", loading = false) {
-      els.status.className = "status on " + kind;
-      els.status.innerHTML = "";
+    function getEl(id) {
+      return document.getElementById(id);
+    }
+
+    function setStatus(msg, kind, loading) {
+      if (!elCache.status) return;
+      elCache.status.className = "status on " + (kind || "info");
+      elCache.status.innerHTML = "";
       if (loading) {
-        const s = document.createElement("span");
+        var s = document.createElement("span");
         s.className = "spin";
-        els.status.appendChild(s);
+        elCache.status.appendChild(s);
       }
-      const t = document.createElement("span");
+      var t = document.createElement("span");
       t.textContent = msg;
-      els.status.appendChild(t);
+      elCache.status.appendChild(t);
     }
 
     function isGoogle(url) {
       if (!url) return false;
       try {
-        const h = new URL(url).hostname.toLowerCase();
-        return GOOGLE_HOSTS.some((g) => h === g || h.endsWith("." + g));
-      } catch (_) {
-        return GOOGLE_HOSTS.some((g) => String(url).toLowerCase().includes(g));
+        var h = new URL(url).hostname.toLowerCase();
+        return GOOGLE_HOSTS.some(function (g) { return h === g || h.endsWith("." + g); });
+      } catch (e) {
+        return GOOGLE_HOSTS.some(function (g) { return String(url).toLowerCase().includes(g); });
       }
     }
 
     function titleOf(item) {
-      const raw = item.title || item.content || item.text || item.plainText || item.description || "";
-      const clean = String(raw).replace(/<[^>]*>/g, "").trim();
-      if (clean) return clean.length > 80 ? clean.slice(0, 77) + "…" : clean;
-      return `${item.type || "item"} ${item.id}`;
+      var raw = item.title || item.content || item.text || item.plainText || item.description || "";
+      var clean = String(raw).replace(/<[^>]*>/g, "").trim();
+      if (clean) return clean.length > 80 ? clean.slice(0, 77) + "\u2026" : clean;
+      return (item.type || "item") + " " + item.id;
     }
 
     function escHtml(s) {
-      return String(s).replace(/[&<>"']/g, (c) =>
-        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
     }
 
-    const SCOPE_HINT = {
+    var SCOPE_HINT = {
       "selected-frame": "Выдели на доске фрейм (или любой элемент внутри него) и нажми кнопку.",
-      "selection": "Выдели нужные элементы и нажми кнопку — фрейм не обязателен.",
+      "selection": "Выдели нужные элементы и нажми кнопку — фрейм не обязателен."
     };
+
     function refreshScopeHint() {
-      els.scopeHint.textContent = SCOPE_HINT[els.scope.value] || "";
+      if (elCache.scopeHint) {
+        elCache.scopeHint.textContent = SCOPE_HINT[elCache.scope.value] || "";
+      }
     }
 
-    // Определяем целевой фрейм для записи результата.
     async function resolveFrame() {
-      const sel = await miro.board.getSelection();
-      const direct = sel.find((it) => it.type === "frame");
+      var sel = await miro.board.getSelection();
+      var direct = sel.find(function (it) { return it.type === "frame"; });
       if (direct) return direct;
-      const child = sel.find((it) => it.parentId);
+      var child = sel.find(function (it) { return it.parentId; });
       if (child) {
-        const all = await miro.board.get({ type: "frame" });
-        const f = all.find((fr) => fr.id === child.parentId);
+        var all = await miro.board.get({ type: "frame" });
+        var f = all.find(function (fr) { return fr.id === child.parentId; });
         if (f) return f;
       }
       return null;
     }
 
-    // Собираем элементы по выбранному режиму.
     async function collectItems() {
-      const scope = els.scope.value;
+      var scope = elCache.scope.value;
       if (scope === "selection") {
-        const sel = await miro.board.getSelection();
-        return { items: sel.filter((it) => it.type !== "frame"), frame: await resolveFrame() };
+        var sel = await miro.board.getSelection();
+        return {
+          items: sel.filter(function (it) { return it.type !== "frame"; }),
+          frame: await resolveFrame()
+        };
       }
-      // selected-frame
-      const frame = await resolveFrame();
+      var frame = await resolveFrame();
       if (!frame) throw new Error("Не найден фрейм. Выдели фрейм или элемент внутри него.");
-      const all = await miro.board.get();
-      const items = all.filter((it) => it.parentId === frame.id);
-      return { items, frame };
+      var all = await miro.board.get();
+      var items = all.filter(function (it) { return it.parentId === frame.id; });
+      return { items: items, frame: frame };
     }
 
     function buildData() {
@@ -282,222 +289,221 @@ miro.board.ui.on("icon:click", async () => {
         source: "miro-drive-link-extractor",
         boardId: boardInfo.id,
         frameId: lastFrameId,
-        googleOnly: els.googleOnly.checked,
+        googleOnly: elCache.googleOnly ? elCache.googleOnly.checked : true,
         extractedAt: new Date().toISOString(),
         count: lastFound.length,
-        links: lastFound,
+        links: lastFound
       };
     }
 
     function render(found) {
-      els.results.className = "results on";
-      els.badge.textContent = `${found.length} ${found.length === 1 ? "ссылка" : "ссылок"}`;
-      els.list.innerHTML = "";
-      for (const l of found) {
-        const li = document.createElement("li");
+      elCache.results.className = "results on";
+      elCache.badge.textContent = found.length + (found.length === 1 ? " ссылка" : " ссылок");
+      elCache.list.innerHTML = "";
+      for (var i = 0; i < found.length; i++) {
+        var l = found[i];
+        var li = document.createElement("li");
         li.className = "link";
-        const t = document.createElement("div");
-        t.className = "li-t"; t.textContent = l.title; li.appendChild(t);
-        const a = document.createElement("a");
-        a.className = "li-u"; a.href = l.url; a.target = "_blank";
-        a.rel = "noopener noreferrer"; a.textContent = l.url; li.appendChild(a);
-        const m = document.createElement("div");
-        m.className = "li-m"; m.textContent = `${l.type} · ${l.id}`; li.appendChild(m);
-        els.list.appendChild(li);
+        var t = document.createElement("div");
+        t.className = "li-t";
+        t.textContent = l.title;
+        li.appendChild(t);
+        var a = document.createElement("a");
+        a.className = "li-u";
+        a.href = l.url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.textContent = l.url;
+        li.appendChild(a);
+        var m = document.createElement("div");
+        m.className = "li-m";
+        m.textContent = l.type + " \u00b7 " + l.id;
+        li.appendChild(m);
+        elCache.list.appendChild(li);
       }
-      els.json.textContent = JSON.stringify(buildData(), null, 2);
+      elCache.json.textContent = JSON.stringify(buildData(), null, 2);
     }
 
-    // Записываем результат в фрейм: один текстовый блок, перезаписываемый.
-   async function writeToFrame(frame, found) {
-  if (!frame) {
-    setStatus("Ссылки извлечены, но фрейм не определён — записать в доску некуда. Выбери режим «Выбранный фрейм».", "warn");
-    return;
-  }
+    async function writeToFrame(frame, found) {
+      if (!frame) {
+        setStatus("Ссылки извлечены, но фрейм не определён — записать некуда.", "warn");
+        return;
+      }
 
-  const header = `📥 Drive Links (${found.length}) · ${new Date().toLocaleString()}`;
-  const htmlBody = found.length
-    ? found.map((l) => `<p>${escHtml(l.title)}: <a href="${escHtml(l.url)}">${escHtml(l.url)}</a></p>`).join("")
-    : "<p>Ссылок не найдено.</p>";
-  const content = `<p><strong>${escHtml(header)}</strong></p>${htmlBody}`;
+      var header = "\ud83d\udce5 Drive Links (" + found.length + ") \u00b7 " + new Date().toLocaleString();
+      var htmlBody = "";
+      if (found.length) {
+        for (var i = 0; i < found.length; i++) {
+          var l = found[i];
+          htmlBody += "<p>" + escHtml(l.title) + ": <a href=\"" + escHtml(l.url) + "\">" + escHtml(l.url) + "</a></p>";
+        }
+      } else {
+        htmlBody = "<p>Ссылок не найдено.</p>";
+      }
+      var content = "<p><strong>" + escHtml(header) + "</strong></p>" + htmlBody;
 
-  // Ищем уже созданный нами блок в этом фрейме.
-  const all = await miro.board.get({ type: "text" });
-  let target = null;
-  for (const t of all) {
-    if (t.parentId !== frame.id) continue;
-    try {
-      const tag = await t.getMetadata(OUTPUT_META_KEY);
-      if (tag === OUTPUT_META_VALUE) { target = t; break; }
-    } catch (_) {}
-  }
-
-  if (target) {
-    target.content = content;
-    await target.sync();
-    try { await target.setMetadata("links", found); } catch (_) {}
-  } else {
-    // Нижний правый угол: центр фрейма + половина ширины/высоты фрейма - отступ от края
-    const blockWidth = 340;
-    const blockHeight = 200; // примерная высота блока
-    const margin = 20; // отступ от края фрейма
-    
-    const x = frame.x + (frame.width / 2) - (blockWidth / 2) - margin;
-    const y = frame.y + (frame.height / 2) - (blockHeight / 2) - margin;
-    
-    const text = await miro.board.createText({
-      content,
-      x: x,
-      y: y,
-      width: blockWidth,
-      style: { fillColor: "#fff7d6", textAlign: "left", fontSize: 12 },
-    });
-    
-    text.parentId = frame.id;
-    await text.sync();
-    
-    await text.setMetadata(OUTPUT_META_KEY, OUTPUT_META_VALUE);
-    try { await text.setMetadata("links", found); } catch (_) {}
-  }
-}
-
-      // Текст: заголовок + по строке на ссылку (plain URL, дружелюбно к парсингу).
-      const lines = found.map((l) => `${l.title} — ${l.url}`);
-      const header = `📥 Drive Links (${found.length}) · ${new Date().toLocaleString()}`;
-      const htmlBody = found.length
-        ? found.map((l) => `<p>${escHtml(l.title)}: <a href="${escHtml(l.url)}">${escHtml(l.url)}</a></p>`).join("")
-        : "<p>Ссылок не найдено.</p>";
-      const content = `<p><strong>${escHtml(header)}</strong></p>${htmlBody}`;
-
-      // Ищем уже созданный нами блок в этом фрейме.
-      const all = await miro.board.get({ type: "text" });
-      let target = null;
-      for (const t of all) {
-        if (t.parentId !== frame.id) continue;
+      // Ищем уже созданный нами блок в этом фрейме
+      var allText = await miro.board.get({ type: "text" });
+      var target = null;
+      for (var j = 0; j < allText.length; j++) {
+        var txt = allText[j];
+        if (txt.parentId !== frame.id) continue;
         try {
-          const tag = await t.getMetadata(OUTPUT_META_KEY);
-          if (tag === OUTPUT_META_VALUE) { target = t; break; }
-        } catch (_) { /* нет метадаты — пропускаем */ }
+          var tag = await txt.getMetadata(OUTPUT_META_KEY);
+          if (tag === OUTPUT_META_VALUE) { target = txt; break; }
+        } catch (e) { /* нет метадаты */ }
       }
 
       if (target) {
+        // Обновляем существующий блок
         target.content = content;
         await target.sync();
-        // metadata тоже обновим — полезно n8n как структура
-        try { await target.setMetadata("links", found); } catch (_) {}
+        try { await target.setMetadata("links", found); } catch (e) {}
       } else {
-        // Кладём блок в правый верхний угол фрейма.
-        const x = frame.x + frame.width / 2 - 180;
-        const y = frame.y - frame.height / 2 + 40;
-        const text = await miro.board.createText({
-          content,
-          x, y, width: 320,
-          style: { fillColor: "#fff7d6", textAlign: "left", fontSize: 12 },
+        // Создаём новый блок в нижнем правом углу фрейма
+        var blockWidth = 340;
+        var margin = 30;
+        var x = frame.x + (frame.width / 2) - (blockWidth / 2) - margin;
+        var y = frame.y + (frame.height / 2) - margin;
+
+        var text = await miro.board.createText({
+          content: content,
+          x: x,
+          y: y,
+          width: blockWidth,
+          style: { fillColor: "#fff7d6", textAlign: "left", fontSize: 12 }
         });
-        await frame.add(text);
-        await text.setMetadata(OUTPUT_META_KEY, OUTPUT_META_VALUE);
-        try { await text.setMetadata("links", found); } catch (_) {}
+
+        // Привязываем к фрейму
+        text.parentId = frame.id;
         await text.sync();
+
+        await text.setMetadata(OUTPUT_META_KEY, OUTPUT_META_VALUE);
+        try { await text.setMetadata("links", found); } catch (e) {}
       }
     }
 
     async function run() {
-      els.run.disabled = true;
-      els.results.className = "results";
-      lastFound = []; lastFrameId = null;
+      elCache.run.disabled = true;
+      elCache.results.className = "results";
+      lastFound = [];
+      lastFrameId = null;
       try {
-        setStatus("Читаю элементы…", "info", true);
-        const { items, frame } = await collectItems();
+        setStatus("Читаю элементы\u2026", "info", true);
+        var result = await collectItems();
+        var items = result.items;
+        var frame = result.frame;
         lastFrameId = frame ? frame.id : null;
 
-        const googleOnly = els.googleOnly.checked;
-        const found = [];
-        for (const it of items) {
-          const url = it.linkedTo;
+        var googleOnly = elCache.googleOnly.checked;
+        var found = [];
+        for (var i = 0; i < items.length; i++) {
+          var it = items[i];
+          var url = it.linkedTo;
           if (!url) continue;
           if (googleOnly && !isGoogle(url)) continue;
-          found.push({ id: it.id, type: it.type, title: titleOf(it), url, parentId: it.parentId || null });
+          found.push({
+            id: it.id,
+            type: it.type,
+            title: titleOf(it),
+            url: url,
+            parentId: it.parentId || null
+          });
         }
         lastFound = found;
         render(found);
 
         if (found.length === 0) {
           setStatus(googleOnly ? "Google-ссылок в этой области нет." : "Ссылок не найдено.", "warn");
-        } else if (els.writeBack.checked) {
-          setStatus("Записываю результат в фрейм…", "info", true);
+        } else if (elCache.writeBack.checked) {
+          setStatus("Записываю результат в фрейм\u2026", "info", true);
           await writeToFrame(frame, found);
-          setStatus(`Готово: ${found.length} ссыл. извлечено и записано в фрейм. n8n может забирать.`, "ok");
+          setStatus("Готово: " + found.length + " ссыл. извлечено и записано в фрейм.", "ok");
         } else {
-          setStatus(`Найдено ${found.length} ссыл. (запись в фрейм отключена).`, "ok");
+          setStatus("Найдено " + found.length + " ссыл. (запись в фрейм отключена).", "ok");
         }
       } catch (e) {
         console.error(e);
         setStatus("Ошибка: " + (e && e.message ? e.message : String(e)), "err");
       } finally {
-        els.run.disabled = false;
+        elCache.run.disabled = false;
       }
     }
 
     async function copyJson() {
       if (!lastFound.length) return;
-      const txt = JSON.stringify(buildData(), null, 2);
-      try { await navigator.clipboard.writeText(txt); setStatus("JSON скопирован.", "ok"); }
-      catch (_) {
-        const ta = document.createElement("textarea");
-        ta.value = txt; document.body.appendChild(ta); ta.select();
+      var txt = JSON.stringify(buildData(), null, 2);
+      try {
+        await navigator.clipboard.writeText(txt);
+        setStatus("JSON скопирован.", "ok");
+      } catch (e) {
+        var ta = document.createElement("textarea");
+        ta.value = txt;
+        document.body.appendChild(ta);
+        ta.select();
         try { document.execCommand("copy"); setStatus("JSON скопирован.", "ok"); }
-        catch (e) { setStatus("Не удалось скопировать.", "err"); }
+        catch (e2) { setStatus("Не удалось скопировать.", "err"); }
         document.body.removeChild(ta);
       }
     }
 
     function downloadCsv() {
       if (!lastFound.length) return;
-      const esc = (v) => `"${String(v).replace(/"/g, '""')}"`;
-      const rows = [["title", "url", "type", "id", "parentId"]
-        .map(esc).join(",")];
-      for (const l of lastFound) {
+      function esc(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }
+      var rows = [["title", "url", "type", "id", "parentId"].map(esc).join(",")];
+      for (var i = 0; i < lastFound.length; i++) {
+        var l = lastFound[i];
         rows.push([l.title, l.url, l.type, l.id, l.parentId || ""].map(esc).join(","));
       }
-      const blob = new Blob([rows.join("\r\n")], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = "drive-links.csv";
-      document.body.appendChild(a); a.click();
-      document.body.removeChild(a); URL.revokeObjectURL(url);
+      var blob = new Blob([rows.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = "drive-links.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
       setStatus("CSV скачан.", "ok");
     }
 
     async function initPanel() {
-      $("app").style.display = "block";
-      els = {
-        scope: $("scope"), scopeHint: $("scopeHint"),
-        googleOnly: $("googleOnly"), writeBack: $("writeBack"),
-        run: $("run"), status: $("status"), results: $("results"),
-        badge: $("badge"), list: $("list"), json: $("json"),
-        copy: $("copy"), csv: $("csv"),
-      };
+      var appEl = getEl("app");
+      if (!appEl) return;
+      appEl.style.display = "block";
+
+      elCache.scope = getEl("scope");
+      elCache.scopeHint = getEl("scopeHint");
+      elCache.googleOnly = getEl("googleOnly");
+      elCache.writeBack = getEl("writeBack");
+      elCache.run = getEl("run");
+      elCache.status = getEl("status");
+      elCache.results = getEl("results");
+      elCache.badge = getEl("badge");
+      elCache.list = getEl("list");
+      elCache.json = getEl("json");
+      elCache.copy = getEl("copy");
+      elCache.csv = getEl("csv");
+
       refreshScopeHint();
-      els.scope.addEventListener("change", refreshScopeHint);
-      els.run.addEventListener("click", run);
-      els.copy.addEventListener("click", copyJson);
-      els.csv.addEventListener("click", downloadCsv);
+      if (elCache.scope) elCache.scope.addEventListener("change", refreshScopeHint);
+      if (elCache.run) elCache.run.addEventListener("click", run);
+      if (elCache.copy) elCache.copy.addEventListener("click", copyJson);
+      if (elCache.csv) elCache.csv.addEventListener("click", downloadCsv);
 
-      // getInfo() возвращает {id, createdAt, updatedAt, locale} — без названия доски.
       try {
-        const info = await miro.board.getInfo();
+        var info = await miro.board.getInfo();
         boardInfo = { id: info.id };
-      } catch (_) { /* не критично */ }
-
-      // Авто-запуск, если попросили через URL (?autorun=1)
-      if (params.get("autorun") === "1") run();
+      } catch (e) { /* не критично */ }
     }
 
-    // Панель грузится как обычная страница в iframe; запускаем логику, когда DOM готов.
+    // Запускаем логику панели когда DOM готов
     if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", () => { initPanel().catch(console.error); });
+      document.addEventListener("DOMContentLoaded", function () {
+        initPanel().catch(function (e) { console.error(e); });
+      });
     } else {
-      initPanel().catch(console.error);
+      initPanel().catch(function (e) { console.error(e); });
     }
   </script>
 </body>
