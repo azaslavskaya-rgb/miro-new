@@ -311,11 +311,57 @@
     }
 
     // Записываем результат в фрейм: один текстовый блок, перезаписываемый.
-    async function writeToFrame(frame, found) {
-      if (!frame) {
-        setStatus("Ссылки извлечены, но фрейм не определён — записать в доску некуда. Выбери режим «Выбранный фрейм».", "warn");
-        return;
-      }
+   async function writeToFrame(frame, found) {
+  if (!frame) {
+    setStatus("Ссылки извлечены, но фрейм не определён — записать в доску некуда. Выбери режим «Выбранный фрейм».", "warn");
+    return;
+  }
+
+  const header = `📥 Drive Links (${found.length}) · ${new Date().toLocaleString()}`;
+  const htmlBody = found.length
+    ? found.map((l) => `<p>${escHtml(l.title)}: <a href="${escHtml(l.url)}">${escHtml(l.url)}</a></p>`).join("")
+    : "<p>Ссылок не найдено.</p>";
+  const content = `<p><strong>${escHtml(header)}</strong></p>${htmlBody}`;
+
+  // Ищем уже созданный нами блок в этом фрейме.
+  const all = await miro.board.get({ type: "text" });
+  let target = null;
+  for (const t of all) {
+    if (t.parentId !== frame.id) continue;
+    try {
+      const tag = await t.getMetadata(OUTPUT_META_KEY);
+      if (tag === OUTPUT_META_VALUE) { target = t; break; }
+    } catch (_) {}
+  }
+
+  if (target) {
+    target.content = content;
+    await target.sync();
+    try { await target.setMetadata("links", found); } catch (_) {}
+  } else {
+    // Нижний правый угол: центр фрейма + половина ширины/высоты фрейма - отступ от края
+    const blockWidth = 340;
+    const blockHeight = 200; // примерная высота блока
+    const margin = 20; // отступ от края фрейма
+    
+    const x = frame.x + (frame.width / 2) - (blockWidth / 2) - margin;
+    const y = frame.y + (frame.height / 2) - (blockHeight / 2) - margin;
+    
+    const text = await miro.board.createText({
+      content,
+      x: x,
+      y: y,
+      width: blockWidth,
+      style: { fillColor: "#fff7d6", textAlign: "left", fontSize: 12 },
+    });
+    
+    text.parentId = frame.id;
+    await text.sync();
+    
+    await text.setMetadata(OUTPUT_META_KEY, OUTPUT_META_VALUE);
+    try { await text.setMetadata("links", found); } catch (_) {}
+  }
+}
 
       // Текст: заголовок + по строке на ссылку (plain URL, дружелюбно к парсингу).
       const lines = found.map((l) => `${l.title} — ${l.url}`);
